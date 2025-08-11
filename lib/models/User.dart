@@ -1,4 +1,3 @@
-// Add this User model class to your models
 import 'dart:typed_data';
 
 class User {
@@ -10,7 +9,7 @@ class User {
   final bool isActive;
   final DateTime? lastLogin;
   final String? permissions;
-  final Uint8List? photo; // Add photo field
+  final Uint8List? photo;
 
   User({
     required this.id,
@@ -21,8 +20,7 @@ class User {
     this.isActive = true,
     this.lastLogin,
     this.permissions,
-    this.photo, // Add to constructor
-
+    this.photo,
   });
 
   Map<String, dynamic> toMap() {
@@ -35,8 +33,7 @@ class User {
       'isActive': isActive ? 1 : 0,
       'lastLogin': lastLogin?.toIso8601String(),
       'permissions': permissions,
-      'photo': photo, // Add photo
-
+      'photo': photo,
     };
   }
 
@@ -50,8 +47,7 @@ class User {
       isActive: map['isActive'] == 1,
       lastLogin: map['lastLogin'] != null ? DateTime.parse(map['lastLogin']) : null,
       permissions: map['permissions'],
-      photo: map['photo'], // Add photo
-
+      photo: map['photo'],
     );
   }
 
@@ -63,7 +59,8 @@ class User {
     String? role,
     bool? isActive,
     DateTime? lastLogin,
-    String? permissions, Uint8List? photo,
+    String? permissions,
+    Uint8List? photo,
   }) {
     return User(
       id: id ?? this.id,
@@ -74,6 +71,7 @@ class User {
       isActive: isActive ?? this.isActive,
       lastLogin: lastLogin ?? this.lastLogin,
       permissions: permissions ?? this.permissions,
+      photo: photo ?? this.photo,
     );
   }
 }

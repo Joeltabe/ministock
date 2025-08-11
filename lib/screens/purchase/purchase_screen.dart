@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:ministock/models/StockLocation.dart';
+import 'package:ministock/screens/MapPickerScreen.dart';
 import 'package:ministock/services/DatabaseHelper.dart';
 import 'package:ministock/models/article.dart';
 import 'package:ministock/models/purchase.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../models/supplier.dart';
 
@@ -24,7 +29,15 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   late TextEditingController _poNumberController;
   late TextEditingController _deliveryNoteController;
   late TextEditingController _qualityCheckController;
-  
+late TextEditingController _newLocationNameController;
+late TextEditingController _newLocationAddressController;
+final Uuid _uuid = Uuid();
+
+ List<StockLocation> _locations = [];
+StockLocation? _selectedLocation;
+late TextEditingController _locationIdController;
+
+
   List<Article> _articles = [];
   DateTime _purchaseDate = DateTime.now();
   bool _isLoading = false;
@@ -46,13 +59,106 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
 
   }
 
+// In your location creation dialog
+void _showCreateLocationDialog() async {
+  final LatLng? pickedLocation = await Navigator.push(
+    context,
+    MaterialPageRoute(builder: (context) => OpenStreetMapPicker()),
+  );
+
+  if (pickedLocation != null) {
+    String address = 'Address not available';
+    
+    try {
+      final addresses = await placemarkFromCoordinates(
+        pickedLocation.latitude,
+        pickedLocation.longitude,
+      ).timeout(Duration(seconds: 10), onTimeout: () {
+        return [];
+      });
+
+      address = addresses.isNotEmpty 
+          ? '${addresses.first.street ?? ''}, ${addresses.first.locality ?? ''}'
+              .replaceAll(', ,', ', ') // Clean up missing components
+              .trim()
+          : 'Unknown location';
+
+    } catch (e) {
+      _showErrorMessage('Address lookup failed: ${e.toString()}');
+      address = 'Coordinates: ${pickedLocation.latitude.toStringAsFixed(4)}, '
+                '${pickedLocation.longitude.toStringAsFixed(4)}';
+    }
+
+    // Proceed with dialog...
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Create New Location'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _newLocationNameController,
+                decoration: InputDecoration(
+                  labelText: 'Location Name',
+                  errorText: _newLocationNameController.text.isEmpty 
+                      ? 'Required' 
+                      : null,
+                ),
+              ),
+              SizedBox(height: 16),
+              Text('Latitude: ${pickedLocation.latitude.toStringAsFixed(4)}'),
+              Text('Longitude: ${pickedLocation.longitude.toStringAsFixed(4)}'),
+              SizedBox(height: 8),
+              Text('Address: $address', 
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (_newLocationNameController.text.isEmpty) {
+                  _showErrorMessage('Location name is required');
+                  return;
+                }
+
+                final newLocation = StockLocation(
+                  id: _uuid.v4(),
+                  name: _newLocationNameController.text,
+                  address: address,
+                  latitude: pickedLocation.latitude,
+                  longitude: pickedLocation.longitude,
+                );
+                
+                await DatabaseHelper.instance.createStockLocation(newLocation);
+                _loadStockLocations();
+                Navigator.pop(context);
+              },
+              child: Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
   void _initializeControllers() {
+    _locationIdController = TextEditingController();
+    _loadStockLocations();
     _referenceController = TextEditingController();
     _titleController = TextEditingController();
     _quantityController = TextEditingController(text: '1');
     _priceController = TextEditingController();
     _amountController = TextEditingController();
     _observationsController = TextEditingController();
+      _newLocationNameController = TextEditingController();
+  _newLocationAddressController = TextEditingController();
     _dateController = TextEditingController(
       text: DateFormat('yyyy-MM-dd').format(DateTime.now()),
     );
@@ -64,6 +170,14 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
 // First add this to your state class to track suppliers
 List<Supplier> _suppliers = [];
 Supplier? _selectedSupplier;
+Future<void> _loadStockLocations() async {
+  try {
+    final locations = await DatabaseHelper.instance.getAllStockLocations();
+    setState(() => _locations = locations);
+  } catch (e) {
+    _showErrorMessage('Failed to load locations: ${e.toString()}');
+  }
+}
 
 // Add this method to load suppliers
 Future<void> _loadSuppliers() async {
@@ -149,6 +263,7 @@ String _generateDeliveryNoteNumber() {
         Bprice: double.parse(_priceController.text),
         amount: double.parse(_amountController.text),
         purchaseDate: _purchaseDate,
+        locationId: _locationIdController.text,
         observations: _observationsController.text,
         supplierId: _supplierIdController.text,
         purchaseOrderNumber: _poNumberController.text,
@@ -205,6 +320,8 @@ String _generateDeliveryNoteNumber() {
     _quantityController.text = '1';
     _dateController.text = DateFormat('yyyy-MM-dd').format(DateTime.now());
     _purchaseDate = DateTime.now();
+    _locationIdController.clear();
+setState(() => _selectedLocation = null);
     _supplierIdController.clear();
     _poNumberController.clear();
     _deliveryNoteController.clear();
@@ -449,6 +566,10 @@ DropdownButtonFormField<Supplier>(
   validator: (value) => value == null ? 'Please select a supplier' : null,
 ),
                             SizedBox(height: 16),
+
+_buildLocationDropdown(),
+
+SizedBox(height: 16),
                             TextFormField(
                               controller: _poNumberController,
                               decoration: InputDecoration(
@@ -530,4 +651,69 @@ DropdownButtonFormField<Supplier>(
             ),
     );
   }
+
+Widget _buildLocationDropdown() {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Expanded(
+            child: DropdownButtonFormField<StockLocation>(
+              decoration: InputDecoration(
+                labelText: 'Stock Location',
+                border: OutlineInputBorder(),
+                filled: true,
+                fillColor: Colors.grey[50],
+                prefixIcon: Icon(Icons.location_on_rounded),
+              ),
+              value: _selectedLocation,
+              items: _locations.map((location) {
+                return // Update the DropdownMenuItem's child in _buildLocationDropdown()
+DropdownMenuItem<StockLocation>(
+  value: location,
+  child: Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(location.name, 
+        style: TextStyle(fontSize: 14)),
+      SizedBox(height: 4),
+      Text(
+        '${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}',
+        style: TextStyle(fontSize: 12, color: Colors.grey),
+      ),
+    ],
+  ),
+);
+              }).toList(),
+              onChanged: (location) {
+                setState(() {
+                  _selectedLocation = location;
+                  _locationIdController.text = location?.id ?? '';
+                });
+              },
+              validator: (value) => _locations.isEmpty 
+                  ? 'No locations available'
+                  : value == null ? 'Select a location' : null,
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.add, color: _primaryColor),
+            onPressed: _showCreateLocationDialog,
+          ),
+        ],
+      ),
+      if (_locations.isEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 8.0),
+          child: Text(
+            'No locations found. Click + to create new',
+            style: TextStyle(color: Colors.orange, fontSize: 12)),
+        ),
+    ],
+  );
 }
+
+}
+

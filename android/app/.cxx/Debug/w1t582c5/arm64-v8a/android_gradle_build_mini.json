@@ -1,0 +1,20 @@
+{
+  "buildFiles": [
+    "/home/tabe/flutter/packages/flutter_tools/gradle/src/main/groovy/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/home/tabe/Android/Sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/home/tabe/flutter_apps/ministock/android/app/.cxx/Debug/w1t582c5/arm64-v8a",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/home/tabe/Android/Sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/home/tabe/flutter_apps/ministock/android/app/.cxx/Debug/w1t582c5/arm64-v8a",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {}
+}

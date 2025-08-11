@@ -46,6 +46,9 @@ class _UserFormScreenState extends State<UserFormScreen> {
       });
     }
   }
+  static const List<String> _availableRoles = [
+'owner', 'manager', 'cashier', 'stock-keeper'
+  ];
 
   Future<void> _saveUser() async {
     if (_formKey.currentState!.validate()) {
@@ -222,20 +225,28 @@ class _UserFormScreenState extends State<UserFormScreen> {
                       SizedBox(height: 16),
                       DropdownButtonFormField<String>(
                         value: _selectedRole,
-                        items: ['admin', 'manager', 'cashier', 'stock-keeper']
-                            .map((role) => DropdownMenuItem(
-                                  value: role,
-                                  child: Text(role.toUpperCase()),
-                                ))
-                            .toList(),
-                        onChanged: (value) => setState(() => _selectedRole = value!),
-                        decoration: InputDecoration(
-                          labelText: 'Role',
-                          border: OutlineInputBorder(),
-                          filled: true,
-                          fillColor: cardBackground,
-                          prefixIcon: Icon(Icons.verified_user),
-                        ),
+                            items: _availableRoles.map((String role) {
+                  return DropdownMenuItem<String>(
+                    value: role,
+                    child: Text(
+                      role.toUpperCase(),
+                      style: TextStyle(fontSize: 14),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    setState(() => _selectedRole = newValue);
+                  }
+                },
+                decoration: InputDecoration(
+                  labelText: 'Role',
+                  border: OutlineInputBorder(),
+                  filled: true,
+                  prefixIcon: Icon(Icons.verified_user),
+                ),
+                validator: (value) => value == null ? 'Please select a role' : null,
+              
                       ),
                       if (widget.isEditing) ...[
                         SizedBox(height: 16),

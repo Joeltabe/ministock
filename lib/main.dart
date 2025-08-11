@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:ministock/Service/AuthService.dart';
+import 'package:ministock/models/User.dart';
+import 'package:ministock/screens/sales/SalesListScreen.dart';
+import 'package:ministock/screens/welcome/LoginScreen.dart';
+import 'package:ministock/screens/welcome/onboard.dart';
 import 'package:ministock/services/DatabaseHelper.dart';
 import 'package:ministock/screens/dashboard_screen.dart';
 import 'package:ministock/screens/Articles/inventory_screen.dart';
@@ -64,31 +69,144 @@ final ThemeData appTheme = ThemeData(
     return MaterialApp(
       title: 'mini stock',
       theme: appTheme,
-      home: MainNavigation(),
+      home: AppStartupCheck(),
     );
+  }
+}
+class AppStartupCheck extends StatefulWidget {
+  @override
+  _AppStartupCheckState createState() => _AppStartupCheckState();
+}
+
+class _AppStartupCheckState extends State<AppStartupCheck> {
+  bool _isLoading = true;
+  bool _needsOnboarding = false;
+  User? _loggedInUser;
+  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAuthState();
+  }
+
+  Future<void> _checkAuthState() async {
+    final authService = AuthService();
+    final userId = await authService.getLoggedInUserId();
+    
+    if (userId != null) {
+      final user = await _dbHelper.getUserById(userId);
+      
+      if (user != null) {
+        setState(() {
+          _loggedInUser = user;
+          _isLoading = false;
+        });
+        return;
+      }
+    }
+
+    final hasUsers = await _dbHelper.hasAnyUsers();
+    setState(() {
+      _needsOnboarding = !hasUsers;
+      _isLoading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_loggedInUser != null) {
+      return MainNavigation(user: _loggedInUser);
+    }
+
+    return _needsOnboarding 
+        ? OnboardingFlow(onComplete: _handleOnboardingComplete)
+        : LoginScreen(onLoginSuccess: _handleLoginSuccess);
+  }
+
+  void _handleOnboardingComplete() {
+    setState(() => _needsOnboarding = false);
+  }
+
+  void _handleLoginSuccess(User user) {
+    setState(() => _loggedInUser = user);
   }
 }
 
 class MainNavigation extends StatefulWidget {
+  final User? user;
+
+  const MainNavigation({Key? key, this.user}) : super(key: key);
+
   @override
   _MainNavigationState createState() => _MainNavigationState();
 }
 
 class _MainNavigationState extends State<MainNavigation> {
+  late Future<User> _currentUserFuture;
   int _currentIndex = 0;
-  
-  final List<Widget> _pages = [
-    DashboardScreen(),
-    InventoryScreen(),
-    SalesScreen(),
-    ReportsScreen(),
-  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _currentUserFuture = _loadCurrentUser();
+  }
+
+  Future<User> _loadCurrentUser() async {
+    if (widget.user != null) {
+      return widget.user!;
+    }
+    final authService = AuthService();
+    final userId = await authService.getLoggedInUserId();
+    if (userId == null) {
+      throw Exception('No user logged in');
+    }
+    final user = await DatabaseHelper.instance.getUserById(userId);
+    if (user == null) {
+      throw Exception('User not found');
+    }
+    return user;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: _pages[_currentIndex],
-      bottomNavigationBar: _buildModernNavBar(),
+    return FutureBuilder<User>(
+      future: _currentUserFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        } else if (snapshot.hasError) {
+          return Scaffold(
+            body: Center(child: Text('Error: ${snapshot.error}')),
+          );
+        } else if (!snapshot.hasData) {
+          return Scaffold(
+            body: Center(child: Text('No user data found')),
+          );
+        }
+
+        final User currentUser = snapshot.data!;
+
+        final List<Widget> _pages = [
+          DashboardScreen(user: currentUser),
+          InventoryScreen(),
+          SalesListScreen(),
+          ReportsScreen(),
+        ];
+
+        return Scaffold(
+          body: _pages[_currentIndex],
+          bottomNavigationBar: _buildModernNavBar(),
+        );
+      },
     );
   }
 

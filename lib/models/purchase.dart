@@ -5,13 +5,13 @@ class Purchase {
   final double quantity;
   final double Bprice;
   final double amount;
+  final String locationId;  // Now matches StockLocation.id type
   final DateTime purchaseDate;
   final String? observations;
   final String supplierId;
   final String purchaseOrderNumber;
   final String deliveryNoteNumber;
   final String qualityCheckBy;
-
 
   Purchase({
     this.id,
@@ -20,13 +20,13 @@ class Purchase {
     required this.quantity,
     required this.Bprice,
     required this.amount,
+    required this.locationId,
     DateTime? purchaseDate,
     this.observations,
     required this.supplierId,
     required this.purchaseOrderNumber,
     required this.deliveryNoteNumber,
     required this.qualityCheckBy,
-
   }) : purchaseDate = purchaseDate ?? DateTime.now();
 
   Map<String, dynamic> toMap() {
@@ -40,10 +40,10 @@ class Purchase {
       'purchase_date': purchaseDate.toIso8601String(),
       'observations': observations,
       'supplier_id': supplierId,
+      'location_id': locationId,  // Changed to match database convention
       'po_number': purchaseOrderNumber,
       'delivery_note': deliveryNoteNumber,
       'quality_check_by': qualityCheckBy,
-
     };
   }
 
@@ -57,14 +57,15 @@ class Purchase {
       amount: map['amount'],
       purchaseDate: DateTime.parse(map['purchase_date']),
       observations: map['observations'],
+      locationId: map['location_id'],  // Changed to match database column
       supplierId: map['supplier_id'],
       purchaseOrderNumber: map['po_number'],
       deliveryNoteNumber: map['delivery_note'],
       qualityCheckBy: map['quality_check_by'],
-
     );
   }
 
+  // Updated copyWith method
   Purchase copyWith({
     int? id,
     String? reference,
@@ -90,10 +91,10 @@ class Purchase {
       purchaseDate: purchaseDate ?? this.purchaseDate,
       observations: observations ?? this.observations,
       supplierId: supplierId ?? this.supplierId,
+      locationId: locationId ?? this.locationId,
       purchaseOrderNumber: purchaseOrderNumber ?? this.purchaseOrderNumber,
       deliveryNoteNumber: deliveryNoteNumber ?? this.deliveryNoteNumber,
       qualityCheckBy: qualityCheckBy ?? this.qualityCheckBy,
-
     );
   }
 
@@ -103,13 +104,13 @@ class Purchase {
     return other is Purchase &&
         other.reference == reference &&
         other.purchaseOrderNumber == purchaseOrderNumber &&
-        other.supplierId == supplierId ;
+        other.supplierId == supplierId;
   }
 
   @override
   int get hashCode {
     return reference.hashCode ^
         purchaseOrderNumber.hashCode ^
-        supplierId.hashCode ;
+        supplierId.hashCode;
   }
 }

@@ -1,0 +1,2 @@
+/home/tabe/flutter_apps/ministock/android/app/.cxx/RelWithDebInfo/6tp3u3r5/x86_64/CMakeFiles/edit_cache.dir
+/home/tabe/flutter_apps/ministock/android/app/.cxx/RelWithDebInfo/6tp3u3r5/x86_64/CMakeFiles/rebuild_cache.dir

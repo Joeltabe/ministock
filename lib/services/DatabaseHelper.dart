@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:ministock/models/StockLocation.dart';
 import 'package:ministock/models/User.dart';
 import 'package:ministock/models/purchase.dart';
 import 'package:ministock/models/sale.dart';
@@ -68,18 +69,20 @@ await db.execute('''
     role TEXT NOT NULL,
     isActive INTEGER NOT NULL DEFAULT 1,
     lastLogin TEXT,
-    permissions TEXT
+    permissions TEXT,
+    photo BLOB
   )
 ''');
 
-    await db.execute('''
-      CREATE TABLE StockLocation (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        address TEXT NOT NULL,
-        capacity REAL
-      )
-    ''');
+await db.execute('''
+  CREATE TABLE StockLocation (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    address TEXT NOT NULL,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL
+  )
+''');
 
     await db.execute('''
       CREATE TABLE Article (
@@ -168,8 +171,23 @@ await db.execute('''
     await db.execute('CREATE INDEX idx_sales_date ON Sales(sale_date)');
   }
 
-// Update these methods in your DatabaseHelper class
+  Future<User?> getUserById(String id) async {
+    final db = await database;
+    final users = await db.query(
+      'User',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return users.isNotEmpty ? User.fromMap(users.first) : null;
+  }
 
+  Future<bool> hasAnyUsers() async {
+    final db = await database;
+    final count = await db.rawQuery('SELECT COUNT(*) FROM User');
+    return count.isNotEmpty && count.first.values.first as int > 0;
+  }
+  
 // -- Supplier Operations --
 Future<int> createSupplier(Supplier supplier) async {
   final db = await database;
@@ -214,7 +232,11 @@ Future<int> deleteSupplier(String id) async {
 // -- User CRUD Operations --
 Future<int> createUser(User user) async {
   final db = await database;
-  return await db.insert('User', user.toMap());
+  return await db.insert(
+    'User',
+    user.toMap(),
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
 }
 
 Future<User?> readUser(String id) async {
@@ -326,6 +348,35 @@ Future<int> createPurchase(Purchase purchase) async {
       return await txn.insert('Purchase', purchase.toMap());
     });
   });
+}
+Future<int> createStockLocation(StockLocation location) async {
+  final db = await instance.database;
+  return await db.insert('StockLocation', location.toMap());
+}
+
+Future<List<StockLocation>> getAllStockLocations() async {
+  final db = await instance.database;
+  final List<Map<String, dynamic>> maps = await db.query('StockLocation');
+  return maps.map((map) => StockLocation.fromMap(map)).toList();
+}
+
+Future<int> updateStockLocation(StockLocation location) async {
+  final db = await instance.database;
+  return await db.update(
+    'StockLocation',
+    location.toMap(),
+    where: 'id = ?',
+    whereArgs: [location.id],
+  );
+}
+
+Future<int> deleteStockLocation(String id) async {
+  final db = await instance.database;
+  return await db.delete(
+    'StockLocation',
+    where: 'id = ?',
+    whereArgs: [id],
+  );
 }
 
   Future<Purchase?> readPurchase(int id) async {

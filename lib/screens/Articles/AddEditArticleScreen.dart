@@ -1,14 +1,14 @@
 import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:ministock/services/DatabaseHelper.dart';
 import 'package:ministock/models/article.dart';
+
 class AddEditArticleScreen extends StatefulWidget {
   final Article? article;
 
-  AddEditArticleScreen({this.article});
+  const AddEditArticleScreen({Key? key, this.article}) : super(key: key);
 
   @override
   _AddEditArticleScreenState createState() => _AddEditArticleScreenState();
@@ -16,6 +16,9 @@ class AddEditArticleScreen extends StatefulWidget {
 
 class _AddEditArticleScreenState extends State<AddEditArticleScreen> {
   final _formKey = GlobalKey<FormState>();
+  final List<TextEditingController> _controllers = [];
+  
+  // Controllers
   late TextEditingController _referenceController;
   late TextEditingController _titleController;
   late TextEditingController _typeController;
@@ -23,45 +26,65 @@ class _AddEditArticleScreenState extends State<AddEditArticleScreen> {
   late TextEditingController _priceWTController;
   late TextEditingController _vatController;
   late TextEditingController _observationsController;
-  Uint8List? _imageBytes;
   late TextEditingController _barcodeController;
-late TextEditingController _manufacturerController;
-late TextEditingController _batchNumberController;
-late TextEditingController _alternativeCodesController;
-late TextEditingController _expiryDateController;
-DateTime? _expiryDate;
-  String _priceTTC = '0.00'; // Track TTC price as state
+  late TextEditingController _manufacturerController;
+  late TextEditingController _batchNumberController;
+  late TextEditingController _alternativeCodesController;
+  late TextEditingController _expiryDateController;
+  
+  // State variables
+  Uint8List? _imageBytes;
+  String _priceTTC = '0.00';
+  DateTime? _expiryDate;
 
   @override
   void initState() {
     super.initState();
-    _referenceController = TextEditingController(text: widget.article?.reference ?? '');
-    _titleController = TextEditingController(text: widget.article?.title ?? '');
-    _typeController = TextEditingController(text: widget.article?.type ?? '');
-    _categoryController = TextEditingController(text: widget.article?.category ?? '');
-    _priceWTController = TextEditingController(text: widget.article?.priceWT.toString() ?? '');
-    _vatController = TextEditingController(text: widget.article?.vat.toString() ?? '20');
-    _observationsController = TextEditingController(text: widget.article?.observations ?? '');
-    _imageBytes = widget.article?.image;
-
-  // New controllers
-  _barcodeController = TextEditingController(text: widget.article?.barcode ?? '');
-  _manufacturerController = TextEditingController(text: widget.article?.manufacturer ?? '');
-  _batchNumberController = TextEditingController(text: widget.article?.batchNumber ?? '');
-  _alternativeCodesController = TextEditingController(
-    text: widget.article?.alternativeCodes?.join(', ') ?? '',
-  );
-  _expiryDateController = TextEditingController();
-  if (widget.article?.expiryDate != null) {
-    _expiryDate = widget.article?.expiryDate;
-    _expiryDateController.text = DateFormat('yyyy-MM-dd').format(widget.article!.expiryDate!);
+    _initializeControllers();
+    _calculateInitialPriceTTC();
   }
-      // Add listeners to update price in real-time
+
+  @override
+  void dispose() {
+    for (var controller in _controllers) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  void _initializeControllers() {
+    _referenceController = _createController(widget.article?.reference ?? '');
+    _titleController = _createController(widget.article?.title ?? '');
+    _typeController = _createController(widget.article?.type ?? '');
+    _categoryController = _createController(widget.article?.category ?? '');
+    _priceWTController = _createController(widget.article?.priceWT.toString() ?? '');
+    _vatController = _createController(widget.article?.vat.toString() ?? '20');
+    _observationsController = _createController(widget.article?.observations ?? '');
+    _barcodeController = _createController(widget.article?.barcode ?? '');
+    _manufacturerController = _createController(widget.article?.manufacturer ?? '');
+    _batchNumberController = _createController(widget.article?.batchNumber ?? '');
+    _alternativeCodesController = _createController(widget.article?.alternativeCodes?.join(', ') ?? '');
+    _expiryDateController = _createController('');
+    
+    _imageBytes = widget.article?.image;
+    
+    if (widget.article?.expiryDate != null) {
+      _expiryDate = widget.article?.expiryDate;
+      _expiryDateController.text = DateFormat('yyyy-MM-dd').format(widget.article!.expiryDate!);
+    }
+
+    // Add listeners for real-time price calculation
     _priceWTController.addListener(_updatePriceTTC);
     _vatController.addListener(_updatePriceTTC);
   }
 
-    void _calculateInitialPriceTTC() {
+  TextEditingController _createController(String text) {
+    final controller = TextEditingController(text: text);
+    _controllers.add(controller);
+    return controller;
+  }
+
+  void _calculateInitialPriceTTC() {
     if (widget.article != null) {
       _priceTTC = (widget.article!.priceWT * (1 + widget.article!.vat/100)).toStringAsFixed(2);
     }
@@ -73,47 +96,76 @@ DateTime? _expiryDate;
     });
   }
 
-Future<void> _pickExpiryDate() async {
-  final selectedDate = await showDatePicker(
-    context: context,
-    initialDate: _expiryDate ?? DateTime.now(),
-    firstDate: DateTime(2000),
-    lastDate: DateTime(2100),
-  );
-  if (selectedDate != null) {
-    setState(() {
-      _expiryDate = selectedDate;
-      _expiryDateController.text = DateFormat('yyyy-MM-dd').format(selectedDate);
-    });
+  String _calculatePriceTTC() {
+    try {
+      final priceWT = double.tryParse(_priceWTController.text) ?? 0;
+      final vat = double.tryParse(_vatController.text) ?? 0;
+      return (priceWT * (1 + vat/100)).toStringAsFixed(2);
+    } catch (e) {
+      return '0.00';
+    }
   }
-}
-  Future<void> _pickImage() async {
-    final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      final bytes = await pickedFile.readAsBytes();
+
+  Future<void> _pickExpiryDate() async {
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: _expiryDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    
+    if (selectedDate != null) {
       setState(() {
-        _imageBytes = bytes;
+        _expiryDate = selectedDate;
+        _expiryDateController.text = DateFormat('yyyy-MM-dd').format(selectedDate);
       });
     }
   }
 
-Future<void> _saveArticle() async {
-  if (_formKey.currentState!.validate()) {
+  Future<void> _pickImage() async {
+    try {
+      final pickedFile = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+      
+      if (pickedFile != null) {
+        final bytes = await pickedFile.readAsBytes();
+        setState(() {
+          _imageBytes = bytes;
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to pick image: ${e.toString()}')),
+      );
+    }
+  }
+
+  Future<void> _saveArticle() async {
+    if (!_formKey.currentState!.validate()) return;
+
     try {
       final article = Article(
-        reference: _referenceController.text,
-        title: _titleController.text,
-        barcode: _barcodeController.text,
-        type: _typeController.text,
-        category: _categoryController.text,
+        reference: _referenceController.text.trim(),
+        title: _titleController.text.trim(),
+        barcode: _barcodeController.text.trim(),
+        type: _typeController.text.trim(),
+        category: _categoryController.text.trim(),
         priceWT: double.parse(_priceWTController.text),
         vat: double.parse(_vatController.text),
-        priceTTC: double.parse(_priceWTController.text) * (1 + double.parse(_vatController.text)/100),
+        priceTTC: double.parse(_priceTTC),
         image: _imageBytes,
-        observations: _observationsController.text,
-        manufacturer: _manufacturerController.text.isNotEmpty ? _manufacturerController.text : null,
+        observations: _observationsController.text.trim(),
+        manufacturer: _manufacturerController.text.trim().isNotEmpty 
+            ? _manufacturerController.text.trim() 
+            : null,
         expiryDate: _expiryDate,
-        batchNumber: _batchNumberController.text.isNotEmpty ? _batchNumberController.text : null,
+        batchNumber: _batchNumberController.text.trim().isNotEmpty
+            ? _batchNumberController.text.trim()
+            : null,
         alternativeCodes: _alternativeCodesController.text
             .split(',')
             .map((s) => s.trim())
@@ -123,28 +175,22 @@ Future<void> _saveArticle() async {
 
       if (widget.article == null) {
         await DatabaseHelper.instance.createArticle(article);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Product created successfully')));
       } else {
         await DatabaseHelper.instance.updateArticle(article);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Product updated successfully')));
       }
-      Navigator.pop(context);
+      
+      if (mounted) Navigator.pop(context, true);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error saving article: ${e.toString()}'),
-        ),
+        SnackBar(content: Text('Error saving product: ${e.toString()}')),
       );
     }
   }
-}
-  String _calculatePriceTTC() {
-    try {
-      final priceWT = double.parse(_priceWTController.text);
-      final vat = double.parse(_vatController.text);
-      return (priceWT * (1 + vat/100)).toStringAsFixed(2);
-    } catch (e) {
-      return '0.00';
-    }
-  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -152,212 +198,107 @@ Future<void> _saveArticle() async {
         title: Text(widget.article == null ? 'Add Product' : 'Edit Product'),
         actions: [
           IconButton(
-            icon: Icon(Icons.save),
+            icon: const Icon(Icons.save),
+            tooltip: 'Save',
             onPressed: _saveArticle,
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
+      body: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              GestureDetector(
-                onTap: _pickImage,
-                child: Container(
-                  height: 180,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: Colors.grey[100],
-                  ),
-                  child: _imageBytes != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.memory(
-                            _imageBytes!,
-                            fit: BoxFit.cover,
-                          ),
-                        )
-                      : Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.camera_alt_rounded,
-                              size: 48,
-                              color: Colors.grey[400],
-                            ),
-                            SizedBox(height: 8),
-                            Text(
-                              'Tap to add image',
-                              style: TextStyle(color: Colors.grey[600]),
-                            ),
-                          ],
-                        ),
-                ),
-              ),
-              SizedBox(height: 24),
-              TextFormField(
+              // Image Picker
+              _buildImagePicker(),
+              const SizedBox(height: 24),
+              
+              // Product Identification Section
+              _buildSectionHeader('Product Identification'),
+              _buildTextField(
                 controller: _referenceController,
-                decoration: InputDecoration(
-                  labelText: 'Product Code',
-                  prefixIcon: Icon(Icons.qr_code_rounded),
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) => value!.isEmpty ? 'Required' : null,
+                label: 'Product Code',
+                icon: Icons.qr_code_rounded,
+                isRequired: true,
               ),
-              SizedBox(height: 16),
-    TextFormField(
-      controller: _barcodeController,
-      decoration: InputDecoration(
-        labelText: 'Barcode',
-        prefixIcon: Icon(Icons.qr_code_2_rounded),
-        border: OutlineInputBorder(),
-      ),
-      validator: (value) => value!.isEmpty ? 'Required' : null,
-    ),
-    SizedBox(height: 16),
-              TextFormField(
+              _buildTextField(
+                controller: _barcodeController,
+                label: 'Barcode',
+                icon: Icons.qr_code_2_rounded,
+                isRequired: true,
+              ),
+              _buildTextField(
                 controller: _titleController,
-                decoration: InputDecoration(
-                  labelText: 'Product Name',
-                  prefixIcon: Icon(Icons.title_rounded),
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) => value!.isEmpty ? 'Required' : null,
+                label: 'Product Name',
+                icon: Icons.title_rounded,
+                isRequired: true,
               ),
-              SizedBox(height: 16),
+              
+              // Pricing Section
+              _buildSectionHeader('Pricing'),
               Row(
                 children: [
                   Expanded(
-                    child: TextFormField(
+                    child: _buildTextField(
                       controller: _priceWTController,
-                      decoration: InputDecoration(
-                        labelText: 'Price (excl. tax)',
-                        prefixIcon: Icon(Icons.attach_money_rounded),
-                        border: OutlineInputBorder(),
-                      ),
+                      label: 'Price (excl. tax)',
+                      icon: Icons.attach_money_rounded,
                       keyboardType: TextInputType.numberWithOptions(decimal: true),
-                      validator: (value) => value!.isEmpty ? 'Required' : null,
-                                            onChanged: (_) => _updatePriceTTC(), // Update on change
-
+                      isRequired: true,
                     ),
                   ),
-                  SizedBox(width: 16),
+                  const SizedBox(width: 16),
                   Expanded(
-                    child: TextFormField(
+                    child: _buildTextField(
                       controller: _vatController,
-                      decoration: InputDecoration(
-                        labelText: 'VAT %',
-                        prefixIcon: Icon(Icons.percent_rounded),
-                        border: OutlineInputBorder(),
-                      ),
+                      label: 'VAT %',
+                      icon: Icons.percent_rounded,
                       keyboardType: TextInputType.number,
-                      validator: (value) => value!.isEmpty ? 'Required' : null,
-                                            onChanged: (_) => _updatePriceTTC(), // Update on change
-
+                      isRequired: true,
                     ),
                   ),
                 ],
               ),
-              SizedBox(height: 16),
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.indigo.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Total Price (incl. tax)',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.indigo,
-                      ),
-                    ),
-                    Text(
-                      _priceTTC,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                        color: Colors.indigo,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: 16),
-              TextFormField(
+              _buildPriceTTCDisplay(),
+              
+              // Product Details Section
+              _buildSectionHeader('Product Details'),
+              _buildTextField(
                 controller: _categoryController,
-                decoration: InputDecoration(
-                  labelText: 'Category',
-                  prefixIcon: Icon(Icons.category_rounded),
-                  border: OutlineInputBorder(),
-                ),
+                label: 'Category',
+                icon: Icons.category_rounded,
               ),
-              SizedBox(height: 16),
-              TextFormField(
+              _buildTextField(
+                controller: _typeController,
+                label: 'Type',
+                icon: Icons.type_specimen_rounded,
+              ),
+              _buildTextField(
+                controller: _manufacturerController,
+                label: 'Manufacturer',
+                icon: Icons.business_rounded,
+              ),
+              _buildTextField(
                 controller: _observationsController,
-                decoration: InputDecoration(
-                  labelText: 'Description',
-                  prefixIcon: Icon(Icons.description_rounded),
-                  border: OutlineInputBorder(),
-                ),
+                label: 'Description',
+                icon: Icons.description_rounded,
                 maxLines: 3,
               ),
-  SizedBox(height: 16),
-    TextFormField(
-      controller: _manufacturerController,
-      decoration: InputDecoration(
-        labelText: 'Manufacturer',
-        prefixIcon: Icon(Icons.business_rounded),
-        border: OutlineInputBorder(),
-      ),
-    ),
-    SizedBox(height: 16),
-    GestureDetector(
-      onTap: _pickExpiryDate,
-      child: AbsorbPointer(
-        child: TextFormField(
-          controller: _expiryDateController,
-          decoration: InputDecoration(
-            labelText: 'Expiry Date',
-            prefixIcon: Icon(Icons.calendar_today_rounded),
-            suffixIcon: IconButton(
-              icon: Icon(Icons.clear),
-              onPressed: () {
-                setState(() {
-                  _expiryDate = null;
-                  _expiryDateController.clear();
-                });
-              },
-            ),
-            border: OutlineInputBorder(),
-          ),
-        ),
-      ),
-    ),
-    SizedBox(height: 16),
-    TextFormField(
-      controller: _batchNumberController,
-      decoration: InputDecoration(
-        labelText: 'Batch Number',
-        prefixIcon: Icon(Icons.confirmation_number_rounded),
-        border: OutlineInputBorder(),
-      ),
-    ),
-    SizedBox(height: 16),
-    TextFormField(
-      controller: _alternativeCodesController,
-      decoration: InputDecoration(
-        labelText: 'Alternative Codes (comma-separated)',
-        prefixIcon: Icon(Icons.code_rounded),
-        border: OutlineInputBorder(),
-      ),
-    ),
-
+              
+              // Inventory Details Section
+              _buildSectionHeader('Inventory Details'),
+              _buildExpiryDatePicker(),
+              _buildTextField(
+                controller: _batchNumberController,
+                label: 'Batch Number',
+                icon: Icons.confirmation_number_rounded,
+              ),
+              _buildTextField(
+                controller: _alternativeCodesController,
+                label: 'Alternative Codes (comma-separated)',
+                icon: Icons.code_rounded,
+              ),
             ],
           ),
         ),
@@ -365,5 +306,150 @@ Future<void> _saveArticle() async {
     );
   }
 
-  // ... (rest of the methods remain the same)
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+          color: Theme.of(context).primaryColor,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImagePicker() {
+    return GestureDetector(
+      onTap: _pickImage,
+      child: Container(
+        height: 180,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: Colors.grey[100],
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        child: _imageBytes != null
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.memory(
+                  _imageBytes!,
+                  fit: BoxFit.cover,
+                ),
+              )
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.camera_alt_rounded,
+                    size: 48,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Tap to add product image',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    bool isRequired = false,
+    TextInputType? keyboardType,
+    int maxLines = 1,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: TextFormField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon),
+          border: const OutlineInputBorder(),
+          filled: true,
+          fillColor: Colors.grey[50],
+        ),
+        keyboardType: keyboardType,
+        maxLines: maxLines,
+        validator: isRequired
+            ? (value) => value!.trim().isEmpty ? '$label is required' : null
+            : null,
+      ),
+    );
+  }
+
+  Widget _buildPriceTTCDisplay() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.indigo.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.indigo.withOpacity(0.1)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Total Price (incl. tax)',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.indigo[700],
+            ),
+          ),
+          Text(
+            '$_priceTTC ${_getCurrencySymbol()}',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              color: Colors.indigo[700],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpiryDatePicker() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: GestureDetector(
+        onTap: _pickExpiryDate,
+        child: AbsorbPointer(
+          child: TextFormField(
+            controller: _expiryDateController,
+            decoration: InputDecoration(
+              labelText: 'Expiry Date',
+              prefixIcon: const Icon(Icons.calendar_today_rounded),
+              suffixIcon: _expiryDate != null
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        setState(() {
+                          _expiryDate = null;
+                          _expiryDateController.clear();
+                        });
+                      },
+                    )
+                  : null,
+              border: const OutlineInputBorder(),
+              filled: true,
+              fillColor: Colors.grey[50],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _getCurrencySymbol() {
+    final format = NumberFormat.simpleCurrency(locale: Localizations.localeOf(context).toString());
+    return format.currencySymbol;
+  }
 }

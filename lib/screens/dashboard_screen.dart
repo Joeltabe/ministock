@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ministock/models/User.dart';
 import 'package:ministock/screens/Suppliers/supplier_list.dart';
 import 'package:ministock/screens/user/UserList.dart';
 import 'package:ministock/services/DatabaseHelper.dart';
@@ -12,6 +13,10 @@ import 'package:ministock/screens/sales/sales_screen.dart';
 import 'package:intl/intl.dart';
 
 class DashboardScreen extends StatefulWidget {
+  final User user;
+
+  const DashboardScreen({required this.user, Key? key}) : super(key: key);
+
   @override
   _DashboardScreenState createState() => _DashboardScreenState();
 }
@@ -90,53 +95,89 @@ Future<void> _fetchDashboardData() async {
         onRefresh: _fetchDashboardData,
         child: CustomScrollView(
           slivers: [
-            SliverAppBar(
-              expandedHeight: 200,
-              flexibleSpace: FlexibleSpaceBar(
-                background: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [primaryColor, accentColor],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Mini Stock',
+SliverAppBar(
+  expandedHeight: 250,
+  pinned: true,
+  backgroundColor: primaryColor,
+  flexibleSpace: FlexibleSpaceBar(
+    collapseMode: CollapseMode.parallax,
+    titlePadding: EdgeInsets.only(left: 16, bottom: 16),
+    background: Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [primaryColor, accentColor],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundImage: widget.user.photo != null
+                      ? MemoryImage(widget.user.photo!)
+                      : null,
+                  backgroundColor: Colors.white.withOpacity(0.2),
+                  child: widget.user.photo == null
+                      ? Text(
+                          widget.user.fullName[0].toUpperCase(),
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 32,
                             fontWeight: FontWeight.bold,
+                            fontSize: 20,
                           ),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Manage your warehouse efficiently',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 16,
-                          ),
-                        ),
-                        SizedBox(height: 12),
-                        Text(
-                          DateFormat('EEEE, MMMM d').format(DateTime.now()),
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.8),
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
+                        )
+                      : null,
+                ),
+                SizedBox(width: 12),
+                Text(
+                  widget.user.fullName.split(' ')[0],
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
+              ],
+            ),
+            SizedBox(height: 20),
+            Text(
+              'Mini Stock',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
               ),
             ),
+            SizedBox(height: 8),
+            Text(
+              'Manage your warehouse efficiently',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.9),
+                fontSize: 16,
+              ),
+            ),
+            SizedBox(height: 12),
+            Text(
+              DateFormat('EEEE, MMMM d').format(DateTime.now()),
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.8),
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  ),
+),
+
             SliverPadding(
               padding: EdgeInsets.all(16),
               sliver: isLoading
@@ -203,7 +244,7 @@ Future<void> _fetchDashboardData() async {
                               onTap: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => SalesListScreen(),
+                                  builder: (context) => SalesScreen(),
                                 ),
                               ),
                             ),
@@ -214,7 +255,7 @@ Future<void> _fetchDashboardData() async {
                               onTap: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => PurchaseListScreen(),
+                                  builder: (context) => PurchaseScreen(),
                                 ),
                               ),
                             ),
